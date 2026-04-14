@@ -19,11 +19,13 @@ def main(data_dir, model_dir, feat_dir, data_type, device):
     
     total_size, _ = test_data.shape
 
-    device_id = int(device)
-    torch.cuda.set_device(device_id)
+    device_id = device
+    if device_id is not None:
+        torch.cuda.set_device(device_id)
     dagmm = torch.load(os.path.join(model_dir, 'gru_ae.pkl'))
-    dagmm.to_cuda(device_id)
-    dagmm = dagmm.cuda()
+    if device_id is not None:
+        dagmm.to_cuda(device_id)
+        dagmm = dagmm.cuda()
     dagmm.test_mode()
     
     feature = []
@@ -31,7 +33,10 @@ def main(data_dir, model_dir, feat_dir, data_type, device):
         if batch * batch_size >= total_size:
             break
         input = test_data[batch_size * batch : batch_size * (batch + 1)]
-        output = dagmm.feature(torch.Tensor(input).long().cuda())
+        t = torch.Tensor(input).long()
+        if device_id is not None:
+            t = t.cuda()
+        output = dagmm.feature(t)
         feature.append(output.detach().cpu())
 
     feature = torch.cat(feature, dim=0).numpy()

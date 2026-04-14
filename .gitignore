@@ -1,8 +1,52 @@
-/main/mix.py
-/data/feat/
-/data/made/
-/data/model/
-/data/result/
-/data/data/btest.npy
-/data/data/wtest.npy
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data & model artifacts
+*.npy
+*.pkl
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.ckpt
+*.onnx
+
+# Output directories
+feat/
+made/
+models/
+results/
+
+# Logs & plots
+*.log
+*.png
+*.pdf
+*.svg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp

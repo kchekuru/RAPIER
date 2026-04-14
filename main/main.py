@@ -47,5 +47,5 @@ if __name__ == '__main__':
     model_dir= '../data/model'
     made_dir = '../data/made'
     result_dir='../data/result'
-    cuda = 5
+    cuda = 'None'
     main(data_dir, model_dir, feat_dir, made_dir, result_dir, cuda)

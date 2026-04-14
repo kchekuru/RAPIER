@@ -16,7 +16,8 @@ class LSTM_AE_GMM(nn.Module):
         self.dropout = dropout 
         self.device = device
 
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         
         # 词向量层
         self.embedder = nn.Embedding(self.max_len, self.emb_dim)
@@ -27,13 +28,13 @@ class LSTM_AE_GMM(nn.Module):
                 hidden_size=self.hidden_size,
                 batch_first=True,
                 bidirectional=True,
-            ).cuda(), 
+            ),
             nn.GRU(
                 input_size=self.hidden_size * 2,
                 hidden_size=self.hidden_size,
                 batch_first=True,
                 bidirectional=True,
-            ).cuda()
+            )
         ])
         # GRU Decoder层 （按照FS-Net图所示）
         self.decoders = nn.ModuleList([
@@ -42,13 +43,13 @@ class LSTM_AE_GMM(nn.Module):
                 hidden_size=self.hidden_size,
                 batch_first=True,
                 bidirectional=True,
-            ).cuda(), 
+            ),
             nn.GRU(
                 input_size=self.hidden_size * 2,
                 hidden_size=self.hidden_size,
                 batch_first=True,
                 bidirectional=True,
-            ).cuda()
+            )
         ])
         # Reconstruct层
         self.rec_fc1 = nn.Linear(4 * self.hidden_size, self.hidden_size)
@@ -73,7 +74,8 @@ class LSTM_AE_GMM(nn.Module):
 
     def encode(self, x):
         # encoder层
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         embed_x = self.embedder(x.long())
         if self.training is True:
             embed_x = F.dropout(embed_x)
@@ -90,14 +92,16 @@ class LSTM_AE_GMM(nn.Module):
         return res_h
     
     def decode_input(self, x):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         y = x.reshape(-1, 1, 4 * self.hidden_size)
         y = y.repeat(1, self.input_size, 1)
         return y
     
     def decode(self, x):
         # decoder层
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         input = x.view(-1, self.input_size, 4 * self.hidden_size)
         outputs = [input]
         hs = []
@@ -113,7 +117,8 @@ class LSTM_AE_GMM(nn.Module):
     
     def reconstruct(self, x, y):
         # reconstruct层
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         x_rec = self.rec_fc2(F.selu(self.rec_fc1(x)))
         loss = F.cross_entropy(x_rec.view(-1, self.max_len), y.long().view(-1), reduction='none')
         loss = loss.view(-1, self.input_size)
@@ -122,19 +127,22 @@ class LSTM_AE_GMM(nn.Module):
         return loss_ret
     
     def estimate(self, x):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         x = x.view(-1, 4 * self.hidden_size)
         res = self.est_drop(F.tanh(self.fc1(x)))
         res = self.softmax(self.fc2(res))
         return res
     
     def feature(self, input):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         res_encode_h = self.encode(input.float())
         return res_encode_h
 
     def predict(self, input):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         res_encode_h = self.encode(input.float())
         decode_input = self.decode_input(res_encode_h)
         res_decode, res_decode_h = self.decode(decode_input)
@@ -142,18 +150,21 @@ class LSTM_AE_GMM(nn.Module):
         return res_encode_h, loss_all
 
     def loss(self, input):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         _, loss_all = self.predict(input)
         return torch.mean(loss_all, dim=0)
     
     def classify_loss(self, input, labels):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         feats, rec_loss = self.predict(input)
         score = self.estimate(feats)
         return F.cross_entropy(score, labels) + torch.mean(rec_loss, dim=0)
     
     def classify_loss_1(self, input, labels):
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         feats, rec_loss = self.predict(input)
         score = self.estimate(feats)
         return F.cross_entropy(score, labels, reduce = False) + rec_loss
@@ -173,7 +184,8 @@ class LSTM_AE_GMM(nn.Module):
     
     def to_cuda(self, device):
         self.device = device
-        torch.cuda.set_device(self.device)
+        if self.device is not None:
+            torch.cuda.set_device(self.device)
         for encoder in self.encoders:
             encoder = encoder.cuda()
         for decoder in self.decoders:

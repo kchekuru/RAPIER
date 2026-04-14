@@ -92,7 +92,8 @@ def predict(test_loader, model, device, alpha=0.5):
 
 def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     
-    cuda_device = int(cuda_device)
+    if str(cuda_device) != 'None':
+        cuda_device = int(cuda_device)
     # get the origin training set
     be = np.load(os.path.join(feat_dir, 'be_corrected.npy'))[:, :32]
     ma = np.load(os.path.join(feat_dir, 'ma_corrected.npy'))[:, :32]

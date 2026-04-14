@@ -14,9 +14,11 @@ python get_origin_flow_data.py "sequence_data_path" "save_dir" "data_type"
 * `sequence_data_path: ` The sequence data of all flows in pcap files, without zero-padding. (The values are prefix-cumulative values, and will be further processed by `get_origin_flow_data.py`)
 * `ext: ` The extension name of pcap files to process (e.g. `pcap`, `pcapng`).
 * `save_dir: ` The save directory of the processed sequence data of all flows.
-* `data_type: ` The kind of the processed data, e.g. `w`, `b` and `test`.
+* `data_type: ` The kind of the processed data, e.g. `be` (benign), `ma` (malicious) and `test`.
 
-Output: A sequence numpy file of `data_type` in `save_dir`. i.e., `{save_dir}/{data_type}.npy`, the dimension of each sample is 50. Need to add the 51st dimension for detection.
+> **Note:** Both preprocessing scripts run on CPU only — no GPU is required.
+
+Output: A sequence numpy file of `data_type` in `save_dir`. i.e., `{save_dir}/{data_type}.npy`, the dimension of each sample is 50. Need to add the 51st dimension (label: `0` for benign, `1` for malicious) for detection.
 
 ## Detection/Prediction:
 
@@ -33,9 +35,11 @@ The argument can be modified in `main.py` are:
 * `result_dir: ` The directory of the detection/prediction result of the test data.
 
 The required input files:
-* `{data_dir}/{benign.npy}: ` The benign preprocessed training data. 
-* `{data_dir}/{malicious.npy}: ` The malicious preprocessed training data.
-* `{data_dir}/{test.npy}: ` The preprocessed testing data.
+* `{data_dir}/be.npy: ` The benign preprocessed training data.
+* `{data_dir}/ma.npy: ` The malicious preprocessed training data.
+* `{data_dir}/test.npy: ` The preprocessed testing data.
+
+> **Note:** Detection/Prediction defaults to CPU (`cuda = 'None'` in `main.py`). No GPU is required.
 
 All data in `{data_dir}` should have dimensions of (*n*, 51), where *n* is the number of samples. Each sample is a 51-dimension vector, where first 50 dimensions are time-series data of traffic and the last one is the true label for the sample (used to evaluate. `0` is for benign and `1` is for malicious). If RAPIER is used to predict, the last dimension can be any value.
 
