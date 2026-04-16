@@ -8,17 +8,30 @@ import sys, os
 import numpy as np
 from tqdm import tqdm
 
-from .loss import loss_coteaching
+from .loss import loss_coteaching, loss_simple
+
+
+def _drop_nonfinite_rows(array, name):
+    """Drop rows containing NaN/Inf to keep classifier training numerically stable."""
+    if array.ndim != 2:
+        return array
+    finite_mask = np.isfinite(array).all(axis=1)
+    dropped = int((~finite_mask).sum())
+    if dropped > 0:
+        print(f'[warn] {name}: dropping {dropped} non-finite rows out of {array.shape[0]}')
+    return array[finite_mask]
 
 # Hyper Parameters
 batch_size = 128
-learning_rate = 1e-3
+learning_rate = 1e-4
 epochs = 100
 num_gradual = 10
 forget_rate = 0.1
 exponent = 1
 rate_schedule = np.ones(epochs) * forget_rate
 rate_schedule[:num_gradual] = np.linspace(0, forget_rate ** exponent, num_gradual)
+grad_clip = 1.0
+weight_decay = 1e-5
 
 def accuracy(logit, target):
     """Computes the precision@k for the specified values of k"""
@@ -58,13 +71,19 @@ def train(train_loader, epoch, model1, optimizer1, model2, optimizer2, device):
         prec2 = accuracy(logits2, labels)
         train_total2 += 1
         train_correct2 += prec2
-        loss_1, loss_2 = loss_coteaching(logits1, logits2, labels, rate_schedule[epoch])
+        
+        # Use stable simple cross-entropy loss instead of co-teaching
+        loss_1 = loss_simple(logits1, labels)
+        loss_2 = loss_simple(logits2, labels)
 
         optimizer1.zero_grad()
         loss_1.backward()
+        torch.nn.utils.clip_grad_norm_(model1.parameters(), grad_clip)
         optimizer1.step()
+        
         optimizer2.zero_grad()
         loss_2.backward()
+        torch.nn.utils.clip_grad_norm_(model2.parameters(), grad_clip)
         optimizer2.step()
 
     train_acc1=float(train_correct1)/float(train_total1)
@@ -97,6 +116,8 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     # get the origin training set
     be = np.load(os.path.join(feat_dir, 'be_corrected.npy'), allow_pickle=True)[:, :32]
     ma = np.load(os.path.join(feat_dir, 'ma_corrected.npy'), allow_pickle=True)[:, :32]
+    be = _drop_nonfinite_rows(be, 'be_corrected.npy')
+    ma = _drop_nonfinite_rows(ma, 'ma_corrected.npy')
     be_shape = be.shape[0]
     ma_shape = ma.shape[0]
 
@@ -106,6 +127,9 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
         be_gen = np.load(os.path.join(feat_dir, 'be_%s_generated_GAN_%d.npy' % (TRAIN, index)), allow_pickle=True)
         ma_gen1 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_1_%d.npy' % (TRAIN, index)), allow_pickle=True)
         ma_gen2 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_2_%d.npy' % (TRAIN, index)), allow_pickle=True)
+        be_gen = _drop_nonfinite_rows(be_gen, 'be_%s_generated_GAN_%d.npy' % (TRAIN, index))
+        ma_gen1 = _drop_nonfinite_rows(ma_gen1, 'ma_%s_generated_GAN_1_%d.npy' % (TRAIN, index))
+        ma_gen2 = _drop_nonfinite_rows(ma_gen2, 'ma_%s_generated_GAN_2_%d.npy' % (TRAIN, index))
         np.random.shuffle(be_gen)
         np.random.shuffle(ma_gen1)
         np.random.shuffle(ma_gen2)
@@ -125,8 +149,10 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     train_data = np.concatenate([be, ma], axis=0)
     train_label = np.concatenate([np.zeros(be.shape[0]), np.ones(ma.shape[0])], axis=0)
     train_dataset = np.concatenate((train_data, train_label[:, None]), axis=1)
+    train_dataset = _drop_nonfinite_rows(train_dataset, 'train_dataset')
 
     test_data_label = np.load(os.path.join(feat_dir, 'test.npy'), allow_pickle=True)
+    test_data_label = _drop_nonfinite_rows(test_data_label, 'test.npy')
     test_data = test_data_label[:, :32]
     test_label = test_data_label[:, -1]
 
@@ -144,13 +170,13 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     if device != None:
         mlp1.to_cuda(device)
         mlp1 = mlp1.cuda()
-    optimizer1 = torch.optim.Adam(mlp1.parameters(), lr=learning_rate)
+    optimizer1 = torch.optim.Adam(mlp1.parameters(), lr=learning_rate, weight_decay=weight_decay)
     
     mlp2 = MLP(input_size=32, hiddens=[16, 8], output_size=2, device=device)
     if device != None:
         mlp2.to_cuda(device)
         mlp2 = mlp2.cuda()
-    optimizer2 = torch.optim.Adam(mlp2.parameters(), lr=learning_rate)
+    optimizer2 = torch.optim.Adam(mlp2.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     epoch=0
     mlp1.train()
@@ -177,7 +203,7 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     F1score = 2 * Recall * Precision / (Recall + Precision)
     print(Recall, Precision, F1score)
     
-    with open('../data/result/detection_result.txt', 'w') as fp:
+    with open(os.path.join(result_dir, 'detection_result.txt'), 'w') as fp:
         fp.write('Testing data: Benign/Malicious = %d/%d\n'%((TN + FP), (TP + FN)))
         fp.write('Recall: %.2f, Precision: %.2f, F1: %.2f\n'%(Recall, Precision, F1score))
         fp.write('Acc: %.2f\n'%(Accuracy))

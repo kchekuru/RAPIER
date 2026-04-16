@@ -4,6 +4,10 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 
+# Simple cross-entropy loss (stable baseline)
+def loss_simple(y, t):
+    return F.cross_entropy(y, t, reduction='mean')
+
 # Loss functions - Co-teaching
 def loss_coteaching(y_1, y_2, t, forget_rate):
     loss_1 = F.cross_entropy(y_1, t, reduce = False)
@@ -15,13 +19,13 @@ def loss_coteaching(y_1, y_2, t, forget_rate):
     loss_2_sorted = loss_2[ind_2_sorted]
 
     remember_rate = 1 - forget_rate
-    num_remember = int(remember_rate * len(loss_1_sorted))
+    num_remember = max(1, int(remember_rate * len(loss_1_sorted)))  # Ensure at least 1
 
     ind_1_update = ind_1_sorted[:num_remember]
     ind_2_update = ind_2_sorted[:num_remember]
     # exchange
-    loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update])
-    loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update])
+    loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update], reduction='mean')
+    loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update], reduction='mean')
 
-    return torch.sum(loss_1_update)/num_remember, torch.sum(loss_2_update)/num_remember
+    return loss_1_update, loss_2_update
 

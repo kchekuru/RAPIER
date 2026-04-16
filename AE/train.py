@@ -11,8 +11,8 @@ Max_epochs = 1000
 def main(data_dir, model_dir, device):
 
     # get raw time-series data of training traffic data
-    train_data_be = np.load(os.path.join(data_dir, 'be.npy'), allow_pickle=True)
-    train_data_ma = np.load(os.path.join(data_dir, 'ma.npy'), allow_pickle=True)
+    train_data_be = np.load(os.path.join(data_dir, 'be.npy'))
+    train_data_ma = np.load(os.path.join(data_dir, 'ma.npy'))
     train_data = np.concatenate([train_data_be[:, :50], train_data_ma[:, :50]], axis=0)
     np.random.shuffle(train_data)
     
