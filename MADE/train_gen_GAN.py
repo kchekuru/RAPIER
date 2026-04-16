@@ -14,13 +14,14 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
 
     train_type_be = 'be_' + TRAIN
     train_type_ma = 'ma_' + TRAIN
-    be = np.load(os.path.join(feat_dir, train_type_be + '.npy'))[:, :32]
-    ma = np.load(os.path.join(feat_dir, train_type_ma + '.npy'))[:, :32]
+    be = np.load(os.path.join(feat_dir, train_type_be + '.npy'), allow_pickle=True)[:, :32]
+    ma = np.load(os.path.join(feat_dir, train_type_ma + '.npy'), allow_pickle=True)[:, :32]
 
     input_size = 2
     output_size = be.shape[1]
     hiddens = [8, 16]
     device = int(cuda_device) if cuda_device != 'None' else None
+    use_cuda = device is not None
     model_name = 'made' # 'MAF' or 'MADE'
     dataset_name = 'myData'
     batch_size = 500
@@ -69,27 +70,27 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
     ma_max = NLogP_ma_sort[int(ma_max_ratio * len(NLogP_ma))]
 
     MaGenModel_1 = GEN(input_size, hiddens, output_size, device)
-    if device != None:
+    if use_cuda:
         torch.cuda.set_device(device)
         MaGenModel_1 = MaGenModel_1.cuda()
 
     MaGenModel_2 = GEN(input_size, hiddens, output_size, device)
-    if device != None:
+    if use_cuda:
         torch.cuda.set_device(device)
         MaGenModel_2 = MaGenModel_2.cuda()
 
     BeGenModel = GEN(input_size, hiddens, output_size, device)
-    if device != None:
+    if use_cuda:
         torch.cuda.set_device(device)
         BeGenModel = BeGenModel.cuda()
 
-    BeMADE = torch.load(os.path.join(model_dir, load_name_be))
-    if device != None:
+    BeMADE = torch.load(os.path.join(model_dir, load_name_be), weights_only=False)
+    if use_cuda:
         torch.cuda.set_device(device)
         BeMADE = BeMADE.cuda()
         
-    MaMADE = torch.load(os.path.join(model_dir, load_name_ma))
-    if device != None:
+    MaMADE = torch.load(os.path.join(model_dir, load_name_ma), weights_only=False)
+    if use_cuda:
         torch.cuda.set_device(device)
         MaMADE = MaMADE.cuda()
 
@@ -98,7 +99,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
     optimizer_ma2 = torch.optim.Adam(MaGenModel_2.parameters(), lr=lr, weight_decay=1e-6)
 
     D = MLP(input_size=output_size, hiddens=[16, 8], output_size=2, device=device)
-    if device != None:
+    if use_cuda:
         D.to_cuda(device)
         D = D.cuda()
     optimizer_D = torch.optim.Adam(D.parameters(), lr=lr)
@@ -112,6 +113,16 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
     be = torch.Tensor(be)
     ma = torch.Tensor(ma)
 
+    def move_tensor(tensor):
+        return tensor.cuda() if use_cuda else tensor
+
+    be_mean = move_tensor(be_mean)
+    be_std = move_tensor(be_std)
+    ma_mean = move_tensor(ma_mean)
+    ma_std = move_tensor(ma_std)
+    be = move_tensor(be)
+    ma = move_tensor(ma)
+
     print(be.shape, NLogP_be.shape)
     be_in_MINMAX = be[(NLogP_be - be_MAX) * (NLogP_be - be_MIN) < 0]
     be_in_minmax = be[(NLogP_be - be_max) * (NLogP_be - be_min) < 0]
@@ -119,7 +130,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
 
     def Entropy(GenModel, batch_size, seed):
         X, _ = make_blobs(n_samples=batch_size, centers=[[0, 0]], n_features=2, random_state=seed)
-        X = torch.Tensor(X)
+        X = move_tensor(torch.Tensor(X))
         batch = GenModel.forward(X)
         N = batch_size
         L = torch.linalg.norm(batch, dim=1)
@@ -128,11 +139,11 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         return batch, H
 
     def get_NLogP(batch, MADE, Print=False):
-        input = batch.float().cuda()
+        input = move_tensor(batch.float())
         out = MADE.forward(input)
         mu, logp = torch.chunk(out, 2, dim=1)
         logp = 20 - F.relu(20 - logp)
-        u = (input - mu) * torch.exp(0.5 * logp).cuda()
+        u = (input - mu) * torch.exp(0.5 * logp)
         negloglik_loss = 0.5 * (u ** 2).sum(dim=1)
         negloglik_loss += 0.5 * input.shape[1] * np.log(2 * math.pi)
         negloglik_loss -= 0.5 * torch.sum(logp, dim=1)
@@ -142,8 +153,9 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         GenModel = GenModel.cpu()
         GenModel.to_cpu()
         torch.save(GenModel, os.path.join(model_dir, save_name))
-        GenModel.to_cuda(device)
-        GenModel = GenModel.cuda()
+        if use_cuda:
+            GenModel.to_cuda(device)
+            GenModel = GenModel.cuda()
 
     for epoch in range(epochs):
         # training Generator
@@ -155,10 +167,10 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         
         # calculate samples' density
         NLogP_be_beMADE = get_NLogP(batch_be, BeMADE)
-        NLogP_be_maMADE = get_NLogP((batch_be * be_std.cuda() + be_mean.cuda() - ma_mean.cuda()) / ma_std.cuda(), MaMADE)
+        NLogP_be_maMADE = get_NLogP((batch_be * be_std + be_mean - ma_mean) / ma_std, MaMADE)
         NLogP_ma1_beMADE = get_NLogP(batch_ma1, BeMADE)
-        NLogP_ma1_maMADE = get_NLogP((batch_ma1 * be_std.cuda() + be_mean.cuda() - ma_mean.cuda()) / ma_std.cuda(), MaMADE, Print=True)
-        NLogP_ma2_beMADE = get_NLogP((batch_ma2 * ma_std.cuda() + ma_mean.cuda() - be_mean.cuda()) / be_std.cuda(), BeMADE)
+        NLogP_ma1_maMADE = get_NLogP((batch_ma1 * be_std + be_mean - ma_mean) / ma_std, MaMADE, Print=True)
+        NLogP_ma2_beMADE = get_NLogP((batch_ma2 * ma_std + ma_mean - be_mean) / be_std, BeMADE)
         NLogP_ma2_maMADE = get_NLogP(batch_ma2, MaMADE)
         
         # loss function for MB
@@ -166,7 +178,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         E2_ma1 =  torch.mean(NLogP_ma1_beMADE * NLogP_ma1_maMADE.ge(ma_max) * NLogP_ma1_beMADE.gt(be_max))
         E3_ma1 = -torch.mean(NLogP_ma1_maMADE * NLogP_ma1_maMADE.lt(ma_max))
         fm_ma1 = torch.linalg.norm(
-            torch.mean(D.f(batch_ma1 * be_std.cuda() + be_mean.cuda())) - 
+            torch.mean(D.f(batch_ma1 * be_std + be_mean)) - 
             torch.mean(D.f(be_in_minmax))
         )
         loss_ma1 = H_ma1 + E1_ma1 + E2_ma1 + E3_ma1 + fm_ma1
@@ -175,7 +187,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         E1_ma2 = -torch.mean(NLogP_ma2_maMADE * NLogP_ma2_beMADE.ge(be_max) * NLogP_ma2_maMADE.lt(ma_max))
         E2_ma2 = -torch.mean(NLogP_ma2_beMADE * NLogP_ma2_beMADE.lt(be_max))
         fm_ma2 = torch.linalg.norm(
-            torch.mean(D.f(batch_ma2 * ma_std.cuda() + ma_mean.cuda())) - 
+            torch.mean(D.f(batch_ma2 * ma_std + ma_mean)) - 
             torch.mean(D.f(ma_in_minmax))
         )
         loss_ma2 = H_ma2 + E1_ma2 + E2_ma2 + fm_ma2
@@ -185,7 +197,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, cuda_device):
         E2_be =  torch.mean(NLogP_be_beMADE * NLogP_be_maMADE.ge(ma_max) * NLogP_be_beMADE.gt(be_MAX))
         E3_be = -torch.mean(NLogP_be_maMADE * NLogP_be_maMADE.lt(ma_max))
         fm_be = torch.linalg.norm(
-            torch.mean(D.f(batch_be * be_std.cuda() + be_mean.cuda())) - 
+            torch.mean(D.f(batch_be * be_std + be_mean)) - 
             torch.mean(D.f(be_in_MINMAX))
         )
         loss_be = H_be + E1_be + E2_be + E3_be + fm_be

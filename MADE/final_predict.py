@@ -8,16 +8,49 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
+
+def _ensure_2d(array, width):
+    if array.ndim == 2:
+        return array
+    if array.size == 0:
+        return np.empty((0, width))
+    return array.reshape(1, -1)
+
 # Using an Ensemble of ML to correct remaining samples label.
 def main(feat_dir):
 
-    be_g = np.load(os.path.join(feat_dir, 'be_groundtruth.npy'))
-    ma_g = np.load(os.path.join(feat_dir, 'ma_groundtruth.npy'))
-    be_u = np.load(os.path.join(feat_dir, 'be_unknown.npy'))
-    ma_u = np.load(os.path.join(feat_dir, 'ma_unknown.npy'))
+    be_g = np.load(os.path.join(feat_dir, 'be_groundtruth.npy'), allow_pickle=True)
+    ma_g = np.load(os.path.join(feat_dir, 'ma_groundtruth.npy'), allow_pickle=True)
+    be_u = np.load(os.path.join(feat_dir, 'be_unknown.npy'), allow_pickle=True)
+    ma_u = np.load(os.path.join(feat_dir, 'ma_unknown.npy'), allow_pickle=True)
 
-    X_train = np.concatenate([be_g, ma_g], axis=0)
-    Y_train = np.concatenate([np.zeros(be_g.shape[0]), np.ones(ma_g.shape[0])], axis=0)
+    width = None
+    for array in (be_g, ma_g, be_u, ma_u):
+        if array.ndim == 2 and array.shape[0] > 0:
+            width = array.shape[1]
+            break
+    if width is None:
+        be_all = np.load(os.path.join(feat_dir, 'be.npy'), allow_pickle=True)
+        ma_all = np.load(os.path.join(feat_dir, 'ma.npy'), allow_pickle=True)
+        width = be_all.shape[1]
+    else:
+        be_all = None
+        ma_all = None
+
+    be_g = _ensure_2d(be_g, width)
+    ma_g = _ensure_2d(ma_g, width)
+    be_u = _ensure_2d(be_u, width)
+    ma_u = _ensure_2d(ma_u, width)
+
+    if be_g.shape[0] == 0 or ma_g.shape[0] == 0:
+        if be_all is None:
+            be_all = np.load(os.path.join(feat_dir, 'be.npy'), allow_pickle=True)
+            ma_all = np.load(os.path.join(feat_dir, 'ma.npy'), allow_pickle=True)
+        X_train = np.concatenate([be_all, ma_all], axis=0)
+        Y_train = np.concatenate([np.zeros(be_all.shape[0]), np.ones(ma_all.shape[0])], axis=0)
+    else:
+        X_train = np.concatenate([be_g, ma_g], axis=0)
+        Y_train = np.concatenate([np.zeros(be_g.shape[0]), np.ones(ma_g.shape[0])], axis=0)
 
     X_test = np.concatenate([be_g, ma_g, be_u, ma_u], axis=0)
     Y_test = np.zeros(X_test.shape[0])

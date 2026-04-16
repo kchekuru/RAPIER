@@ -9,8 +9,8 @@ def main(feat_dir, made_dir, alpha, TRAIN):
     
     # According to MADE-density, select true benign samples
     alpha = float(alpha)
-    be = np.load(os.path.join(feat_dir, 'be.npy'))  
-    ma = np.load(os.path.join(feat_dir, 'ma.npy'))
+    be = np.load(os.path.join(feat_dir, 'be.npy'), allow_pickle=True)  
+    ma = np.load(os.path.join(feat_dir, 'ma.npy'), allow_pickle=True)
     feats = np.concatenate((be, ma), axis=0)
     print(feats.shape)
     be_number, be_shape = be.shape

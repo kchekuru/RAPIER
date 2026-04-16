@@ -95,17 +95,17 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     if str(cuda_device) != 'None':
         cuda_device = int(cuda_device)
     # get the origin training set
-    be = np.load(os.path.join(feat_dir, 'be_corrected.npy'))[:, :32]
-    ma = np.load(os.path.join(feat_dir, 'ma_corrected.npy'))[:, :32]
+    be = np.load(os.path.join(feat_dir, 'be_corrected.npy'), allow_pickle=True)[:, :32]
+    ma = np.load(os.path.join(feat_dir, 'ma_corrected.npy'), allow_pickle=True)[:, :32]
     be_shape = be.shape[0]
     ma_shape = ma.shape[0]
 
     for index in range(parallel):
 
         # add synthesized traffic features into the origin training set
-        be_gen = np.load(os.path.join(feat_dir, 'be_%s_generated_GAN_%d.npy' % (TRAIN, index)))
-        ma_gen1 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_1_%d.npy' % (TRAIN, index)))
-        ma_gen2 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_2_%d.npy' % (TRAIN, index)))
+        be_gen = np.load(os.path.join(feat_dir, 'be_%s_generated_GAN_%d.npy' % (TRAIN, index)), allow_pickle=True)
+        ma_gen1 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_1_%d.npy' % (TRAIN, index)), allow_pickle=True)
+        ma_gen2 = np.load(os.path.join(feat_dir, 'ma_%s_generated_GAN_2_%d.npy' % (TRAIN, index)), allow_pickle=True)
         np.random.shuffle(be_gen)
         np.random.shuffle(ma_gen1)
         np.random.shuffle(ma_gen2)
@@ -126,7 +126,7 @@ def main(feat_dir, model_dir, result_dir, TRAIN, cuda_device, parallel=5):
     train_label = np.concatenate([np.zeros(be.shape[0]), np.ones(ma.shape[0])], axis=0)
     train_dataset = np.concatenate((train_data, train_label[:, None]), axis=1)
 
-    test_data_label = np.load(os.path.join(feat_dir, 'test.npy'))
+    test_data_label = np.load(os.path.join(feat_dir, 'test.npy'), allow_pickle=True)
     test_data = test_data_label[:, :32]
     test_label = test_data_label[:, -1]
 

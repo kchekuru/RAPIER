@@ -45,7 +45,7 @@ def train_one_epoch_made(model, epoch, optimizer, train_loader, cuda_device: Opt
 
             negloglik_loss = torch.mean(negloglik_loss)
 
-            train_loss.append(negloglik_loss)
+            train_loss.append(negloglik_loss.detach().numpy())
 
             negloglik_loss.backward()
             optimizer.step()

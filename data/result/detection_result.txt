@@ -1,0 +1,3 @@
+Testing data: Benign/Malicious = 500/500
+Recall: 1.00, Precision: 0.98, F1: 0.99
+Acc: 0.99

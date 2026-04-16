@@ -28,7 +28,7 @@ def main(feat_dir, model_dir, made_dir, TRAIN, TEST, DEVICE):
     # Get model.
     save_name = f"{model_name}_{dataset_name}_{train_type}_{'_'.join(str(d) for d in hidden_dims)}.pt"
 
-    model = torch.load(os.path.join(model_dir, save_name))
+    model = torch.load(os.path.join(model_dir, save_name), weights_only=False)
 
     if cuda_device != None:
         torch.cuda.set_device(cuda_device)

@@ -11,12 +11,12 @@ Max_epochs = 1000
 def main(data_dir, model_dir, device):
 
     # get raw time-series data of training traffic data
-    train_data_be = np.load(os.path.join(data_dir, 'be.npy'))
-    train_data_ma = np.load(os.path.join(data_dir, 'ma.npy'))
+    train_data_be = np.load(os.path.join(data_dir, 'be.npy'), allow_pickle=True)
+    train_data_ma = np.load(os.path.join(data_dir, 'ma.npy'), allow_pickle=True)
     train_data = np.concatenate([train_data_be[:, :50], train_data_ma[:, :50]], axis=0)
     np.random.shuffle(train_data)
     
-    #train_data = np.load(os.path.join(data_dir, 'all.npy'))[:, :50]
+    #train_data = np.load(os.path.join(data_dir, 'all.npy'), allow_pickle=True)[:, :50]
     #print(train_data.shape)
     
     total_size, input_size = train_data.shape
@@ -55,7 +55,7 @@ def main(data_dir, model_dir, device):
             loss.backward()
             optimizer.step()
         print('epoch:', epoch, 'loss:', loss)
-        if (epoch + 1) % 50 == 0: # modified
+        if (epoch + 1) % 50 == 0 or (epoch + 1) == max_epochs: # save every 50 epochs or at end
             dagmm.to_cpu()
             dagmm = dagmm.cpu()
             torch.save(dagmm, os.path.join(model_dir, 'gru_ae.pkl'))

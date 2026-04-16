@@ -12,23 +12,24 @@ import math
 # synthesize 3 types of samples.
 def main(feat_dir, model_dir, TRAIN, index, cuda_device):
 
-    be = np.load(os.path.join(feat_dir, 'be_%s.npy'%(TRAIN)))[:, :32]
-    ma = np.load(os.path.join(feat_dir, 'ma_%s.npy'%(TRAIN)))[:, :32]
+    be = np.load(os.path.join(feat_dir, 'be_%s.npy'%(TRAIN)), allow_pickle=True)[:, :32]
+    ma = np.load(os.path.join(feat_dir, 'ma_%s.npy'%(TRAIN)), allow_pickle=True)[:, :32]
 
     output_size = be.shape[1]
     hiddens = [8, 16]
     device = int(cuda_device) if cuda_device != 'None' else None
+    use_cuda = device is not None
     train_type_be = 'be_' + TRAIN
     train_type_ma = 'ma_' + TRAIN
 
     load_name_be = f"gen_GAN_{train_type_be}_{'_'.join(str(d) for d in hiddens)}.pt"
     load_name_ma1 = f"gen1_GAN_{train_type_ma}_{'_'.join(str(d) for d in hiddens)}.pt"
     load_name_ma2 = f"gen2_GAN_{train_type_ma}_{'_'.join(str(d) for d in hiddens)}.pt"
-    BeGenModel = torch.load(os.path.join(model_dir, load_name_be))
-    MaGenModel_1 = torch.load(os.path.join(model_dir, load_name_ma1))
-    MaGenModel_2 = torch.load(os.path.join(model_dir, load_name_ma2))
+    BeGenModel = torch.load(os.path.join(model_dir, load_name_be), weights_only=False)
+    MaGenModel_1 = torch.load(os.path.join(model_dir, load_name_ma1), weights_only=False)
+    MaGenModel_2 = torch.load(os.path.join(model_dir, load_name_ma2), weights_only=False)
 
-    if device != None:
+    if use_cuda:
         torch.cuda.set_device(device)
         BeGenModel.to_cuda(device)
         BeGenModel = BeGenModel.cuda()
@@ -37,18 +38,20 @@ def main(feat_dir, model_dir, TRAIN, index, cuda_device):
         MaGenModel_2.to_cuda(device)
         MaGenModel_2 = MaGenModel_2.cuda()
 
+    def move_tensor(tensor):
+        return tensor.cuda() if use_cuda else tensor
+
     def generate(train_type, GenModel, total_size, seed):
 
-        data_train = np.load(os.path.join(feat_dir, train_type + '.npy'))[:, :output_size]
+        data_train = np.load(os.path.join(feat_dir, train_type + '.npy'), allow_pickle=True)[:, :output_size]
         mu_train = torch.Tensor(data_train.mean(axis=0))
         s_train = torch.Tensor(data_train.std(axis=0))
 
-        if device != None:
-            mu_train = mu_train.cuda()
-            s_train = s_train.cuda()
+        mu_train = move_tensor(mu_train)
+        s_train = move_tensor(s_train)
 
         X, _ = make_blobs(n_samples=total_size, centers=[[0, 0]], n_features=2, random_state=seed)
-        X = torch.Tensor(X)
+        X = move_tensor(torch.Tensor(X))
         batch = GenModel.forward(X)
         batch1 = batch * s_train + mu_train
         gen_data = batch1.detach().cpu()

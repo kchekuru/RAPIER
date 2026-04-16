@@ -12,7 +12,7 @@ def main(data_dir, model_dir, feat_dir, data_type, device):
 
     device = int(device) if device != 'None' else None
     # get raw testing traffic time-series data
-    test_data_label = np.load(os.path.join(data_dir, data_type + '.npy'))
+    test_data_label = np.load(os.path.join(data_dir, data_type + '.npy'), allow_pickle=True)
     
     test_data = test_data_label[:, :50]
     test_label = test_data_label[:, -1]
@@ -22,7 +22,7 @@ def main(data_dir, model_dir, feat_dir, data_type, device):
     device_id = device
     if device_id is not None:
         torch.cuda.set_device(device_id)
-    dagmm = torch.load(os.path.join(model_dir, 'gru_ae.pkl'))
+    dagmm = torch.load(os.path.join(model_dir, 'gru_ae.pkl'), weights_only=False)
     if device_id is not None:
         dagmm.to_cuda(device_id)
         dagmm = dagmm.cuda()
