@@ -30,11 +30,6 @@ env/
 *.ckpt
 *.onnx
 
-# Output directories
-feat/
-made/
-models/
-results/
 
 # Logs & plots
 *.log
@@ -50,3 +45,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Large local packet captures
+ung-review/backup-training-data/

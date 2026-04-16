@@ -42,7 +42,7 @@ def main(data_dir, model_dir, feat_dir, made_dir, result_dir, cuda):
     Classifier.classify.main(feat_dir, model_dir, result_dir, TRAIN, cuda, parallel=5)
     
 if __name__ == '__main__':
-    data_dir = '../data/data'
+    data_dir = '../data/save'
     feat_dir = '../data/feat'
     model_dir= '../data/model'
     made_dir = '../data/made'

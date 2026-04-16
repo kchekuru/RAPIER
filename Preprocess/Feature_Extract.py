@@ -1,7 +1,10 @@
 import os
 import sys
-import dpkt
 import socket
+
+from scapy.all import PcapReader
+from scapy.layers.inet import IP, TCP
+from scapy.layers.inet6 import IPv6
 
 from xgboost import train
 workspace=sys.path[0]
@@ -50,34 +53,52 @@ class one_burst(object):
         self.pkt_length += pkt_length
 		
 def inet_to_str(inet):
-	return socket.inet_ntop(socket.AF_INET, inet)
+	if isinstance(inet, str):
+		return inet
+	family = socket.AF_INET6 if len(inet) == 16 else socket.AF_INET
+	return socket.inet_ntop(family, inet)
+
+
+def get_network_packet(packet):
+    if IP in packet:
+        return packet[IP]
+    if IPv6 in packet:
+        return packet[IPv6]
+    return None
 
 def get_burst_based_flows(pcap):
     current_flows = dict()
-    for i, (timestamp, buf) in enumerate(pcap):
+    for packet in pcap:
         try:
-            eth = dpkt.ethernet.Ethernet(buf)
+            ip_packet = get_network_packet(packet)
         except Exception as e:
             print(e)
             continue
-        
-        if not isinstance(eth.data, dpkt.ip.IP):
-            eth = dpkt.sll.SLL(buf)
-            if not isinstance(eth.data, dpkt.ip.IP):
-                continue
-		
-        ip = eth.data
-        pkt_length = ip.len
-		
-        src_ip = inet_to_str(ip.src)
-        dst_ip = inet_to_str(ip.dst)
-    
-        if not isinstance(ip.data, dpkt.tcp.TCP):
+
+        if ip_packet is None:
             continue
 
-        tcp = ip.data
-        srcport = tcp.sport
-        dstport = tcp.dport
+        src_raw = getattr(ip_packet, 'src', None)
+        dst_raw = getattr(ip_packet, 'dst', None)
+        if src_raw is None or dst_raw is None:
+            continue
+
+        src_ip = inet_to_str(src_raw)
+        dst_ip = inet_to_str(dst_raw)
+        if TCP not in packet:
+            continue
+
+        tcp = packet[TCP]
+
+        srcport = getattr(tcp, 'sport', None)
+        dstport = getattr(tcp, 'dport', None)
+        if srcport is None or dstport is None:
+            continue
+
+        timestamp = float(packet.time)
+        pkt_length = getattr(ip_packet, 'len', None)
+        if pkt_length is None:
+            pkt_length = len(bytes(ip_packet))
         direction = None
         
         if dstport == 443:
@@ -97,8 +118,7 @@ def get_burst_based_flows(pcap):
     return list(current_flows.values())
 
 def get_flows(file):
-    with open(file,"rb") as input:
-        pcap = dpkt.pcap.Reader(input)
+    with PcapReader(file) as pcap:
         all_flows = get_burst_based_flows(pcap)
         return all_flows
 
@@ -126,6 +146,9 @@ def generate_sequence_data(all_files_flows, output_file, label_file):
     write_into_files(output_labels, label_file)
 
 def write_into_files(output_features,output_file):
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     with open(output_file,"w") as write_fp:
         output_features = [value+"\n" for value in output_features]
         write_fp.writelines(output_features)
@@ -142,12 +165,9 @@ def main(input_dir, output_path, suffix):
     all_files_flows = []
     for file in files:
         try:
-            flows_of_file=get_flows(file)
+            flows_of_file = get_flows(file)
         except Exception as e:
             print(e)
-            pass
-        if flows_of_file==False:#错误记录
-            print(file, "Critical Error2")
             continue
         if len(flows_of_file) <= 0:
             continue
